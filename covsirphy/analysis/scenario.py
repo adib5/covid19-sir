@@ -636,6 +636,14 @@ class Scenario(Term):
             print(f"Running optimization with {n_jobs} CPUs...")
             stopwatch = StopWatch()
         # Estimation of the last phase will be done to determine tau value
+        if n_jobs == 1:
+            for phase in phases:
+                result = self._estimate(model, phase, **kwargs)
+                self._update_self(*result)
+            if stdout:
+                stopwatch.stop()
+                print(f"Completed optimization. Total: {stopwatch.show()}")
+            return None
         if self.tau is None:
             phase_sel, phases = phases[-1], phases[:-1]
             result_tuple_sel = self._estimate(model, phase=phase_sel, **kwargs)
