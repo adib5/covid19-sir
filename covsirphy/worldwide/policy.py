@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import copy
 import functools
 from itertools import groupby
 from operator import itemgetter
@@ -221,7 +220,7 @@ class PolicyMeasures(Term):
         """
         # Parameter estimation
         country, phase = country_phase.split("/")
-        scenario = copy.deepcopy(self.scenario_dict[country])
+        scenario = self.scenario_dict[country]
         scenario.estimate(
             self.model, phases=[phase], n_jobs=1, stdout=False, **kwargs)
         # Stdout
