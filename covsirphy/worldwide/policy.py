@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import copy
+import functools
 from itertools import groupby
 from operator import itemgetter
+from multiprocessing import cpu_count, Pool
 import pandas as pd
 from covsirphy.util.plotting import line_plot
+from covsirphy.util.stopwatch import StopWatch
 from covsirphy.cleaning.jhu_data import JHUData
 from covsirphy.cleaning.population import PopulationData
 from covsirphy.cleaning.oxcgrt import OxCGRTData
@@ -165,18 +169,67 @@ class PolicyMeasures(Term):
             for (length, records) in groupby(sorted_nest, key=itemgetter(1))
         }
 
-    def estimate(self, model):
+    def estimate(self, model, n_jobs=-1, **kwargs):
         """
         Estimate the parameter values of phases in the registered countries.
 
         Args:
             model (covsirphy.ModelBase): ODE model
+            n_jobs (int): the number of parallel jobs or -1 (CPU count)
+            kwargs: the other keyword arguments of Scenario.estimate()
         """
-        model = self.ensure_subclass(model, ModelBase)
+        # Model
+        self.model = self.ensure_subclass(model, ModelBase)
+        model_name = model.NAME
+        # The number of parallel jobs
+        n_jobs = cpu_count() if n_jobs == -1 else n_jobs
+        # Stdout
+        print(f"<{model_name} model: Parameter estimation>")
+        print(f"Running optimization with {n_jobs} CPUs...")
+        stopwatch = StopWatch()
+        # Parameter estimation
+        country_phase_list = self.flatten(
+            [
+                [f"{co}/{ph}" for ph in self.scenario_dict[co].phases()]
+                for co in self._countries
+            ]
+        )
+        scenario_f = functools.partial(self._estimate, **kwargs)
+        with Pool(n_jobs) as p:
+            scenarios = p.map(scenario_f, country_phase_list)
+        for ((co, ph), snl) in zip(country_phase_list, scenarios):
+            self_snl = self.scenario_dict[co]
+            self_snl.series_dict[self.MAIN][ph] = snl.series_dict[self.MAIN][ph]
+            self_snl.estimator_dict[self.MAIN][ph] = snl.estimator_dict[self.MAIN][ph]
         for country in self._countries:
-            print(f"\n{'-' * 20}{country}{'-' * 20}")
-            self.scenario_dict[country].estimate(model)
-        self.model = model
+            self.scenario_dict[country].model_dict[model_name] = model
+        # Stdout
+        stopwatch.stop()
+        print(f"Completed optimization. Total: {stopwatch.show()}")
+
+    def _estimate(self, country_phase, **kwargs):
+        """
+        Perform parameter estimation with the records of the country.
+
+        Args:
+            model (covsirphy.ModelBase): ODE model
+            country_phase (str): 'country name/phase name'
+            kwargs: the other keyword arguments of Scenario.estimate()
+
+        Returns:
+            covsirphy.Scenario
+        """
+        # Parameter estimation
+        country, phase = country_phase.split("/")
+        scenario = copy.deepcopy(self.scenario_dict[country])
+        scenario.estimate(
+            self.model, phases=[phase], n_jobs=1, stdout=False, **kwargs)
+        # Stdout
+        estimator = scenario.phase_estimator(phase=phase)
+        trials, runtime = estimator.total_trials, estimator.run_time_show
+        print(
+            f"\t{phase} phase in {country}: finished {trials} trials in {runtime}")
+        return scenario
 
     def param_history(self, param, roll_window=None, show_figure=True, filename=None, **kwargs):
         """
