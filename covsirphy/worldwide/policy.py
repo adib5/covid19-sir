@@ -189,13 +189,13 @@ class PolicyMeasures(Term):
         # Parameter estimation
         country_phase_list = self.flatten(
             [
-                [f"{co}/{ph}" for ph in self.scenario_dict[co].phases()]
+                [(co, ph) for ph in self.scenario_dict[co].phases()]
                 for co in self._countries
             ]
         )
         scenario_f = functools.partial(self._estimate, **kwargs)
         with Pool(n_jobs) as p:
-            scenarios = p.map(scenario_f, country_phase_list)
+            scenarios = p.starmap(scenario_f, country_phase_list)
         for ((co, ph), snl) in zip(country_phase_list, scenarios):
             self_snl = self.scenario_dict[co]
             self_snl.series_dict[self.MAIN][ph] = snl.series_dict[self.MAIN][ph]
@@ -206,20 +206,20 @@ class PolicyMeasures(Term):
         stopwatch.stop()
         print(f"Completed optimization. Total: {stopwatch.show()}")
 
-    def _estimate(self, country_phase, **kwargs):
+    def _estimate(self, country_phase_comb, **kwargs):
         """
         Perform parameter estimation with the records of the country.
 
         Args:
             model (covsirphy.ModelBase): ODE model
-            country_phase (str): 'country name/phase name'
+            country_phase _comb(tuple(str, str)): country name and phase name
             kwargs: the other keyword arguments of Scenario.estimate()
 
         Returns:
             covsirphy.Scenario
         """
         # Parameter estimation
-        country, phase = country_phase.split("/")
+        country, phase = country_phase_comb
         scenario = self.scenario_dict[country]
         scenario.estimate(
             self.model, phases=[phase], n_jobs=1, stdout=False, **kwargs)
@@ -227,7 +227,7 @@ class PolicyMeasures(Term):
         estimator = scenario.phase_estimator(phase=phase)
         trials, runtime = estimator.total_trials, estimator.run_time_show
         print(
-            f"\t{phase} phase in {country}: finished {trials} trials in {runtime}")
+            f"\t{phase} phase in {country}:\tfinished {trials} trials in {runtime}")
         return scenario
 
     def param_history(self, param, roll_window=None, show_figure=True, filename=None, **kwargs):

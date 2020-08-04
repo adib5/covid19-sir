@@ -85,6 +85,9 @@ example:
 	@echo "<Scenario analysis>"
 	@pipenv run python -m example.scenario_analysis
 
+	@# Worldwide analysis
+	@echo "<Worldwide analysis>"
+	@pipenv run python -m example.worldwide
 
 .PHONY: pypi
 pypi:
