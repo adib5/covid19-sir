@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
+from pprint import pprint
 import covsirphy as cs
 
 
@@ -26,6 +27,7 @@ def main():
     analyser.trend()
     min_len = max(analyser.phase_len().keys())
     analyser.trend(min_len=min_len)
+    pprint(analyser.phase_len(), compact=True)
     # Parameter estimation
     analyser.estimate(cs.SIRF)
     # Parameter history of Rt

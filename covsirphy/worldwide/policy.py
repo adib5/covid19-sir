@@ -195,10 +195,13 @@ class PolicyMeasures(Term):
         )
         scenario_f = functools.partial(self._estimate, **kwargs)
         with Pool(n_jobs) as p:
-            scenarios = p.starmap(scenario_f, country_phase_list)
-        for ((co, ph), snl) in zip(country_phase_list, scenarios):
+            results = p.starmap_async(scenario_f, country_phase_list).get()
+        for ((co, ph), snl) in zip(country_phase_list, results):
             self_snl = self.scenario_dict[co]
-            self_snl.series_dict[self.MAIN][ph] = snl.series_dict[self.MAIN][ph]
+            df = snl.series_dict[self.MAIN].summary()
+            result_dict = df.loc[ph, :].to_dict()
+            print(result_dict)
+            self_snl.series_dict[self.MAIN].update(ph, **result_dict)
             self_snl.estimator_dict[self.MAIN][ph] = snl.estimator_dict[self.MAIN][ph]
         for country in self._countries:
             self.scenario_dict[country].model_dict[model_name] = model
@@ -206,29 +209,28 @@ class PolicyMeasures(Term):
         stopwatch.stop()
         print(f"Completed optimization. Total: {stopwatch.show()}")
 
-    def _estimate(self, country_phase_comb, **kwargs):
+    def _estimate(self, country, phase, **kwargs):
         """
         Perform parameter estimation with the records of the country.
 
         Args:
             model (covsirphy.ModelBase): ODE model
-            country_phase _comb(tuple(str, str)): country name and phase name
+            country (str): country name
+            phase (str): phase name
             kwargs: the other keyword arguments of Scenario.estimate()
 
         Returns:
             covsirphy.Scenario
         """
         # Parameter estimation
-        country, phase = country_phase_comb
-        scenario = self.scenario_dict[country]
-        scenario.estimate(
+        self.scenario_dict[country].estimate(
             self.model, phases=[phase], n_jobs=1, stdout=False, **kwargs)
         # Stdout
-        estimator = scenario.phase_estimator(phase=phase)
+        estimator = self.scenario_dict[country].phase_estimator(phase=phase)
         trials, runtime = estimator.total_trials, estimator.run_time_show
         print(
-            f"\t{phase} phase in {country}:\tfinished {trials} trials in {runtime}")
-        return scenario
+            f"\t{phase} phase in {country}: finished {trials} trials in {runtime}")
+        return self.scenario_dict[country]
 
     def param_history(self, param, roll_window=None, show_figure=True, filename=None, **kwargs):
         """

@@ -513,7 +513,7 @@ class Scenario(Term):
         self.series_dict[name] = copy.deepcopy(phase_series)
         return self
 
-    def _estimate(self, model, phase, name="Main", **kwargs):
+    def _estimate(self, model, phase, name="Main", stdout=True, **kwargs):
         """
         Estimate the parameters of the model using the records.
 
@@ -521,6 +521,7 @@ class Scenario(Term):
             phase (str): phase name, like 1st, 2nd...
             model (covsirphy.ModelBase): ODE model
             name (str): phase series name
+            stdout (bool): whether show the status of progress or not
             kwargs:
                 - keyword arguments of the model parameter
                     - tau value cannot be included
@@ -568,9 +569,10 @@ class Scenario(Term):
         phase_est_dict.update(est_df.to_dict(orient="index")[phase])
         # Show the number of trials and runtime
         trials, runtime = estimator.total_trials, estimator.run_time_show
-        print(
-            f"\t{phase} phase with {model.NAME} model: finished {trials} trials in {runtime}"
-        )
+        if stdout:
+            print(
+                f"\t{phase} phase with {model.NAME} model: finished {trials} trials in {runtime}"
+            )
         # Return the dictionary of the result of estimation
         return (model, name, phase, estimator, phase_est_dict)
 
@@ -638,7 +640,7 @@ class Scenario(Term):
         # Estimation of the last phase will be done to determine tau value
         if n_jobs == 1:
             for phase in phases:
-                result = self._estimate(model, phase, **kwargs)
+                result = self._estimate(model, phase, stdout=stdout, **kwargs)
                 self._update_self(*result)
             if stdout:
                 stopwatch.stop()
@@ -649,7 +651,8 @@ class Scenario(Term):
             result_tuple_sel = self._estimate(model, phase=phase_sel, **kwargs)
             self._update_self(*result_tuple_sel)
         # Estimation of each phase
-        est_f = functools.partial(self._estimate, model, **kwargs)
+        est_f = functools.partial(
+            self._estimate, model, stdout=stdout, **kwargs)
         with Pool(n_jobs) as p:
             result_nest = p.map(est_f, phases)
         for result_tuple in result_nest:
